@@ -75,9 +75,6 @@ func main() {
 			if wpp.PostType != "post" {
 				continue
 			}
-			if i < 600 {
-				continue
-			}
 
 			// Convert to Markdown
 			b := bytes.NewBufferString("")
