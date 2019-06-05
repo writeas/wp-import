@@ -95,14 +95,6 @@ type instance struct {
 	Token string
 }
 
-func (i instance) setUrl(s string) {
-	i.Url = s
-}
-
-func (i instance) setToken(s string) {
-	i.Token = s
-}
-
 // Temporarily using an ini file to store instance tokens.
 // This is probably not what the rest of the code does,
 // but I need some way to handle this for now.
