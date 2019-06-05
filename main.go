@@ -20,6 +20,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strings"
 )
 
 var (
@@ -89,6 +90,70 @@ func parseArgs(args []string) map[string]string {
 	return arguments
 }
 
+type instance struct {
+	Url   string
+	Token string
+}
+
+func (i instance) setUrl(s string) {
+	i.Url = s
+}
+
+func (i instance) setToken(s string) {
+	i.Token = s
+}
+
+// Temporarily using an ini file to store instance tokens.
+// This is probably not what the rest of the code does,
+// but I need some way to handle this for now.
+// TODO: Get this in line with the rest of the code (see T586)
+
+// ini file format:
+// Each instance has its own [section]
+// Semicolons (;) at the beginning of a line indicate a comment
+// Can't start a comment mid-line (this allows semicolons in variable values)
+// Blank lines are ignored
+func importConfig() map[string]instance {
+	file, err := ioutil.ReadFile("instances.ini")
+	if err != nil {
+		errQuit("Error reading instances.ini")
+	}
+	lines := strings.Split(string(file), "\n")
+	instances := make(map[string]instance)
+	curinst := ""
+	newinst := instance{}
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		fc := string(line[0])
+		if line == "" || fc == ";" {
+			continue
+		}
+		if fc == "[" {
+			if curinst != "" {
+				instances[curinst] = newinst
+				newinst = instance{}
+			}
+			curinst = line[1:(len(line) - 1)]
+		} else {
+			loc := strings.Index(line, "=")
+			if curinst == "" || loc == -1 {
+				errQuit("Malformed ini file")
+			}
+			k := line[:loc]
+			v := line[loc+1:]
+			if k == "url" {
+				newinst.Url = v
+			} else if k == "token" {
+				newinst.Token = v
+			} else {
+				errQuit("Malformed ini file")
+			}
+		}
+	}
+	instances[curinst] = newinst
+	return instances
+}
+
 func main() {
 	a := parseArgs(os.Args)
 	// if len(os.Args) < 2 {
@@ -97,24 +162,29 @@ func main() {
 	// }
 	// fname := os.Args[1]
 	fname := a["filename"]
-	instance := "https://write.as"
+	inst := "writeas"
 	if a["instance"] != "" {
-		instance = a["instance"]
+		inst = a["instance"]
 	}
-	// testing
-	fmt.Println(fname, instance)
-	os.Exit(0)
 
-	// TODO: load user config from same func as writeas-cli
+	instances := importConfig()
+	//fmt.Println(instances)
 	t := ""
+	u := ""
+	if val, ok := instances[inst]; ok {
+		t = val.Token
+		u = val.Url
+	}
 	if t == "" {
 		errQuit("not authenticated. run: writeas auth <username>")
 	}
 
 	cl := writeas.NewClientWith(writeas.Config{
-		URL:   instance + "/api",
+		URL:   u + "/api",
 		Token: t,
 	})
+
+	errQuit("We've reached the point where I need an actual token.")
 
 	log.Printf("Reading %s...\n", fname)
 	raw, _ := ioutil.ReadFile(fname)
