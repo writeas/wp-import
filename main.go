@@ -166,6 +166,8 @@ func main() {
 		t = val.Token
 		u = val.Url
 	}
+	// TODO: change this so it offers in-app authentication.
+	// Store URLS and tokens in instances.ini.
 	if t == "" {
 		errQuit("not authenticated. run: writeas auth <username>")
 	}
