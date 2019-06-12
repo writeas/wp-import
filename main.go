@@ -26,25 +26,156 @@ var (
 	commentReg = regexp.MustCompile("(?m)<!-- ([^m ]|m[^o ]|mo[^r ]|mor[^e ])+ -->\n?")
 )
 
-func main() {
-	if len(os.Args) < 2 {
-		//errQuit("usage: wp-import https://write.as filename.xml")
-		errQuit("usage: wp-import filename.xml")
+// Print the usage spec to the terminal and exit cleanly
+func printUsage(help bool) {
+	usage := "usage: wp-import [-h|--help] [-i instance] [-f] filename.xml"
+	if help {
+		usage = usage + "\n" +
+			"  -h|--help     Prints this help message.\n" +
+			"  -i            Specifies the instance to use.\n" +
+			"                Should be one of the instances set up in instances.ini.\n" +
+			"                Defaults to \"writeas\" (https://write.as).\n" +
+			"  -f            Specifies the filename to read from.\n" +
+			"                This can be a relative or absolute path.\n" +
+			"                The flag can be excluded if the filename is the last argument."
 	}
-	//instance := os.Args[1]
-	instance := "https://write.as"
-	fname := os.Args[1]
+	fmt.Println(usage)
+	os.Exit(0)
+}
 
-	// TODO: load user config from same func as writeas-cli
+// This should allow input in these formats:
+//   wp-import -h (or --help)
+//   wp-import filename
+//   wp-import -i instance filename
+//   wp-import -i instance -f filename
+
+func parseArgs(args []string) map[string]string {
+	arguments := make(map[string]string)
+	if len(args) == 2 {
+		if args[1] == "-h" || args[1] == "--help" {
+			printUsage(true)
+		} else if string(args[1][0]) != "-" {
+			arguments["filename"] = args[1]
+		} else {
+			printUsage(false)
+		}
+	} else if len(args) < 2 {
+		printUsage(false)
+	} else {
+		// Starting at 1 because args[0] is the program name
+		for i := 1; i < len(args); i++ {
+			if args[i] == "-h" || args[i] == "--help" {
+				printUsage(true)
+			} else if args[i] == "-i" {
+				if i+1 == len(args) || string(args[i+1][0]) == "-" {
+					printUsage(false)
+				}
+				arguments["instance"] = args[i+1]
+				i++
+			} else if args[i] == "-f" {
+				if i+1 == len(args) || string(args[i+1][0]) == "-" {
+					printUsage(false)
+				}
+				arguments["filename"] = args[i+1]
+				i++
+			} else if i == len(args)-1 && string(args[i][0]) != "-" {
+				arguments["filename"] = args[i]
+			}
+		}
+	}
+	if arguments["filename"] == "" {
+		printUsage(false)
+	}
+	return arguments
+}
+
+type instance struct {
+	Url   string
+	Token string
+}
+
+// Temporarily using an ini file to store instance tokens.
+// This is probably not what the rest of the code does,
+// but I need some way to handle this for now.
+// TODO: Get this in line with the rest of the code (see T586)
+
+// ini file format:
+// Each instance has its own [section]
+// Semicolons (;) at the beginning of a line indicate a comment
+// Can't start a comment mid-line (this allows semicolons in variable values)
+// Blank lines are ignored
+func importConfig() map[string]instance {
+	file, err := ioutil.ReadFile("instances.ini")
+	if err != nil {
+		errQuit("Error reading instances.ini")
+	}
+	lines := strings.Split(string(file), "\n")
+	instances := make(map[string]instance)
+	curinst := ""
+	newinst := instance{}
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		fc := string(line[0])
+		if line == "" || fc == ";" {
+			continue
+		}
+		if fc == "[" {
+			if curinst != "" {
+				instances[curinst] = newinst
+				newinst = instance{}
+			}
+			curinst = line[1:(len(line) - 1)]
+		} else {
+			loc := strings.Index(line, "=")
+			if curinst == "" || loc == -1 {
+				errQuit("Malformed ini file")
+			}
+			k := line[:loc]
+			v := line[loc+1:]
+			if k == "url" {
+				newinst.Url = v
+			} else if k == "token" {
+				newinst.Token = v
+			} else {
+				errQuit("Malformed ini file")
+			}
+		}
+	}
+	instances[curinst] = newinst
+	return instances
+}
+
+func main() {
+	a := parseArgs(os.Args)
+	// if len(os.Args) < 2 {
+	// 	//errQuit("usage: wp-import https://write.as filename.xml")
+	// 	errQuit("usage: wp-import filename.xml")
+	// }
+	// fname := os.Args[1]
+	fname := a["filename"]
+	inst := "writeas"
+	if a["instance"] != "" {
+		inst = a["instance"]
+	}
+
+	instances := importConfig()
+	//fmt.Println(instances)
 	t := ""
+	u := ""
+	if val, ok := instances[inst]; ok {
+		t = val.Token
+		u = val.Url
+	}
 	if t == "" {
 		errQuit("not authenticated. run: writeas auth <username>")
 	}
 
 	cl := writeas.NewClientWith(writeas.Config{
-		URL:   instance + "/api",
+		URL:   u + "/api",
 		Token: t,
 	})
+
+	errQuit("We've reached the point where I need an actual token.")
 
 	log.Printf("Reading %s...\n", fname)
 	raw, _ := ioutil.ReadFile(fname)
