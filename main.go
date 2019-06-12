@@ -193,7 +193,11 @@ func main() {
 		})
 		usr, uerr := cl.LogIn(uname, passwd)
 		if uerr != nil {
-			errQuit("Couldn't log in with those credentials.")
+			if err.Error == "Stop repeatedly trying to log in." {
+				errQuit("Stop repeatedly trying to log in.")
+			} else {
+				errQuit("Couldn't log in with those credentials.")
+			}
 		}
 		file, ferr = os.OpenFile("instances.ini", os.O_APPEND|os.O_WRONLY, 0644)
 		defer file.Close()
