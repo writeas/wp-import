@@ -11,6 +11,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"github.com/frankbille/go-wxr-import"
@@ -20,6 +21,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strings"
 )
 
 var (
@@ -90,6 +92,7 @@ func parseArgs(args []string) map[string]string {
 }
 
 type instance struct {
+	Name  string
 	Url   string
 	Token string
 }
@@ -160,24 +163,44 @@ func main() {
 
 	instances := importConfig()
 	//fmt.Println(instances)
+	var cl writeas.Client
 	t := ""
 	u := ""
 	if val, ok := instances[inst]; ok {
 		t = val.Token
 		u = val.Url
+		cl = writeas.NewClientWith(writeas.Config{
+			URL:   u + "/api",
+			Token: t,
+		})
+	} else {
+		fmt.Println("We don't have a token for " + inst + ".")
+		r := bufio.NewReader(os.Stdin)
+		fmt.Print("Instance name: ")
+		name, _ := strings.Trim(r.ReadString("\n"), "\n")
+		fmt.Print("Instance URL: ")
+		url, _ := strings.Trim(r.ReadString("\n"), "\n")
+		if string(url[:4]) != "https" {
+			url = "https:\\" + url
+		}
+		fmt.Print("Username: ")
+		uname, _ := strings.Trim(r.ReadString("\n"), "\n")
+		fmt.Print("Password: ")
+		passwd, _ := strings.Trim(r.ReadString("\n"), "\n")
+		cl = writeas.NewClientWith(writeas.Config{
+			URL:   url + "/api",
+			Token: "",
+		})
+		usr, uerr := cl.LogIn(uname, passwd)
+		if uerr != nil {
+			errQuit("Couldn't log in with those credentials.")
+		}
+		file, ferr = os.OpenFile("instances.ini", os.O_APPEND|os.O_WRONLY, 0644)
+		defer file.Close()
+		printstr = "\n[" + name + "]\nurl=" + url + "\ntoken=" + cl.Token()
+		fmt.Fprintln(file, printstr)
+		fmt.Println("Okay, you're logged in.")
 	}
-	// TODO: change this so it offers in-app authentication.
-	// Store URLS and tokens in instances.ini.
-	if t == "" {
-		errQuit("not authenticated. run: writeas auth <username>")
-	}
-
-	cl := writeas.NewClientWith(writeas.Config{
-		URL:   u + "/api",
-		Token: t,
-	})
-
-	errQuit("We've reached the point where I need an actual token.")
 
 	log.Printf("Reading %s...\n", fname)
 	raw, _ := ioutil.ReadFile(fname)
