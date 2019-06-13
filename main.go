@@ -118,8 +118,11 @@ func importConfig() map[string]instance {
 	newinst := instance{}
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
+		if line == "" {
+			continue
+		}
 		fc := string(line[0])
-		if line == "" || fc == ";" {
+		if fc == ";" {
 			continue
 		}
 		if fc == "[" {
