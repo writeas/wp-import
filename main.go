@@ -163,7 +163,7 @@ func main() {
 
 	instances := importConfig()
 	//fmt.Println(instances)
-	var cl writeas.Client
+	var cl *writeas.Client
 	t := ""
 	u := ""
 	if val, ok := instances[inst]; ok {
@@ -175,33 +175,36 @@ func main() {
 		})
 	} else {
 		fmt.Println("We don't have a token for " + inst + ".")
-		r := bufio.NewReader(os.Stdin)
-		fmt.Print("Instance name: ")
-		name, _ := strings.Trim(r.ReadString("\n"), "\n")
+		r := bufio.NewScanner(os.Stdin)
 		fmt.Print("Instance URL: ")
-		url, _ := strings.Trim(r.ReadString("\n"), "\n")
-		if string(url[:4]) != "https" {
-			url = "https:\\" + url
+		r.Scan()
+		url := r.Text()
+		if string(url[:5]) != "https" {
+			url = "https://" + url
 		}
+		if string(url[len(url)-1:]) == "/" {
+			url = string(url[:len(url)-1])
+		}
+		//fmt.Println("Using URL", url)
 		fmt.Print("Username: ")
-		uname, _ := strings.Trim(r.ReadString("\n"), "\n")
+		r.Scan()
+		uname := r.Text()
+		//fmt.Println("Using username", uname)
 		fmt.Print("Password: ")
-		passwd, _ := strings.Trim(r.ReadString("\n"), "\n")
+		r.Scan()
+		passwd := r.Text()
+		//fmt.Println("Using password", passwd)
 		cl = writeas.NewClientWith(writeas.Config{
 			URL:   url + "/api",
 			Token: "",
 		})
-		usr, uerr := cl.LogIn(uname, passwd)
+		_, uerr := cl.LogIn(uname, passwd)
 		if uerr != nil {
-			if err.Error == "Stop repeatedly trying to log in." {
-				errQuit("Stop repeatedly trying to log in.")
-			} else {
-				errQuit("Couldn't log in with those credentials.")
-			}
+			errQuit("Couldn't log in with those credentials.")
 		}
-		file, ferr = os.OpenFile("instances.ini", os.O_APPEND|os.O_WRONLY, 0644)
+		file, _ := os.OpenFile("instances.ini", os.O_APPEND|os.O_WRONLY, 0644)
 		defer file.Close()
-		printstr = "\n[" + name + "]\nurl=" + url + "\ntoken=" + cl.Token()
+		printstr := "\n[" + inst + "]\nurl=" + url + "\ntoken=" + cl.Token()
 		fmt.Fprintln(file, printstr)
 		fmt.Println("Okay, you're logged in.")
 	}
@@ -231,7 +234,7 @@ func main() {
 		log.Printf("Done!\n")
 
 		log.Printf("Found %d items.\n", len(ch.Items))
-		for i, wpp := range ch.Items {
+		for _, wpp := range ch.Items {
 			if wpp.PostType != "post" {
 				continue
 			}
