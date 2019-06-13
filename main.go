@@ -266,7 +266,12 @@ func main() {
 			if tags != "" {
 				con += "\n\n" + tags
 			}
-
+			var postlang string
+			if len(ch.Language) > 2 {
+				postlang = string(ch.Language[:2])
+			} else {
+				postlang = ch.Language
+			}
 			p := &writeas.PostParams{
 				Title:      wpp.Title,
 				Slug:       wpp.PostName,
@@ -274,7 +279,7 @@ func main() {
 				Created:    &wpp.PostDateGmt,
 				Updated:    &wpp.PostDateGmt,
 				Font:       "norm",
-				Language:   &ch.Language,
+				Language:   &postlang,
 				Collection: coll.Alias,
 			}
 			log.Printf("Creating %s", p.Title)
