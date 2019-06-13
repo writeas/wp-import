@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"github.com/frankbille/go-wxr-import"
 	"github.com/writeas/godown"
+	"github.com/writeas/nerds/store"
 	"go.code.as/writeas.v2"
 	"io/ioutil"
 	"log"
@@ -222,6 +223,7 @@ func main() {
 	postsCount := 0
 
 	for _, ch := range d.Channels {
+		ch.Title = ch.Title + " " + store.GenerateFriendlyRandomString(4)
 		log.Printf("Channel: %s\n", ch.Title)
 
 		// Create the blog
