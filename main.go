@@ -98,6 +98,25 @@ type instance struct {
 	Token string
 }
 
+// Preparing to be able to handle multiple types of files.
+// For right now, just verify that it's a valid WordPress WXR file.
+// Do this two ways: check that the file extension is "xml", and
+// verify that the word "WordPress" appears in the first 200 characters.
+func identifyFile(fname string, raw []byte) wxr.Wxr {
+	parts := strings.Split(fname, ".")
+	extension := parts[len(parts)-1]
+	rawstr := string(raw[:200])
+	var d wxr.Wxr
+
+	if extension == "xml" && strings.Contains(rawstr, "WordPress") {
+		log.Println("This looks like a WordPress file. Parsing...")
+		return wxr.ParseWxr(raw)
+	} else {
+		errQuit("I can't tell what kind of file this is.")
+	}
+
+}
+
 // Temporarily using an ini file to store instance tokens.
 // This is probably not what the rest of the code does,
 // but I need some way to handle this for now.
@@ -217,7 +236,10 @@ func main() {
 	raw, _ := ioutil.ReadFile(fname)
 
 	log.Println("Parsing...")
-	d := wxr.ParseWxr(raw)
+
+	// What kind of file is it?
+	d := identifyFile(fname, raw)
+
 	log.Printf("Found %d channels.\n", len(d.Channels))
 
 	postsCount := 0
