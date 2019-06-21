@@ -64,10 +64,12 @@ func identifyFile(fname string) *ImportedBlogs {
 		rawstr := string(raw[:200])
 		if strings.Contains(rawstr, "WordPress") {
 			log.Println("This looks like a WordPress file. Parsing...")
+			// Since I know it's a WP file I might as well do this here
+			// instead of delegating wxr.ParseWxr to the helper function
 			return ParseWPFile(wxr.ParseWxr(raw))
 		} else {
 			// It's XML but not WordPress
-			errQuit("I can't tell what kind of file this is.")
+			errQuit("It's XML, but not in a format I recognize.")
 		}
 		// Future development:
 		//} else if extension == "zip" {
@@ -206,6 +208,7 @@ func main() {
 	f_file := flag.String("f", "", "File to be imported")
 	f_help := flag.Bool("h", false, "Print this help message")
 	f_dry := flag.Bool("d", false, "Dry run (parse the input file but don't upload the contents)")
+	f_verb := flag.Bool("v", false, "Display all messages instead of just important ones")
 	flag.Parse()
 	a := flag.Args()
 	if (*f_file == "" && len(a) == 0) || (*f_help == true) {
@@ -213,6 +216,7 @@ func main() {
 		flag.PrintDefaults()
 		return
 	}
+	vbs := *f_verb
 	var fname string
 	if *f_file != "" {
 		fname = *f_file
@@ -268,7 +272,9 @@ func main() {
 		defer file.Close()
 		printstr := "\n[" + inst + "]\nurl=" + url + "\ntoken=" + cl.Token()
 		fmt.Fprintln(file, printstr)
-		fmt.Println("Okay, you're logged in.")
+		if vbs {
+			fmt.Println("Okay, you're logged in.")
+		}
 	}
 
 	// What kind of file is it?
@@ -300,11 +306,15 @@ func main() {
 					errQuit(err.Error())
 				}
 			}
-			log.Printf("Done!\n")
+			if vbs {
+				log.Printf("Done!\n")
+			}
 		}
 		log.Printf("Found %d posts.\n", len(ch.Posts))
 		for _, p := range ch.Posts {
-			log.Printf("Creating %s", p.Title)
+			if vbs {
+				log.Printf("Creating %s", p.Title)
+			}
 			if *f_dry == false {
 				p.Collection = coll.Alias
 				_, err = cl.CreatePost(p)
