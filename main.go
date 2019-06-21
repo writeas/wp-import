@@ -223,7 +223,6 @@ func main() {
 	postsCount := 0
 
 	for _, ch := range d.Channels {
-		ch.Title = ch.Title + " " + store.GenerateFriendlyRandomString(4)
 		log.Printf("Channel: %s\n", ch.Title)
 
 		// Create the blog
@@ -234,7 +233,17 @@ func main() {
 		log.Printf("Creating %s...\n", ch.Title)
 		coll, err := cl.CreateCollection(c)
 		if err != nil {
-			errQuit(err.Error())
+			if err.Error() == "Collection name is already taken." {
+				newTitle := ch.Title + " " + store.GenerateFriendlyRandomString(4)
+				log.Printf("A blog by that name already exists. Changing to %s...\n", newTitle)
+				c.Title = newTitle
+				coll, err = cl.CreateCollection(c)
+				if err != nil {
+					errQuit(err.Error())
+				}
+			} else {
+				errQuit(err.Error())
+			}
 		}
 		log.Printf("Done!\n")
 
