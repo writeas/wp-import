@@ -11,7 +11,7 @@
 package main
 
 import (
-	//	"archive/zip"
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"flag"
@@ -20,7 +20,7 @@ import (
 	"github.com/howeyc/gopass"
 	"github.com/writeas/godown"
 	"github.com/writeas/nerds/store"
-	//	"github.com/writeas/web-core/posts"
+	"github.com/writeas/web-core/posts"
 	//	"github.com/writeas/wf-migrate"
 	// "github.com/writeas/zip-import"
 	"go.code.as/writeas.v2"
@@ -64,17 +64,18 @@ func identifyFile(fname string) *ImportedBlogs {
 		rawstr := string(raw[:200])
 		if strings.Contains(rawstr, "WordPress") {
 			log.Println("This looks like a WordPress file. Parsing...")
-			// Since I know it's a WP file I might as well do this here
-			// instead of delegating wxr.ParseWxr to the helper function
-			return ParseWPFile(wxr.ParseWxr(raw))
+			// Changed my mind. Since we're exporting ParseWPFile it should
+			// accept the contents of a file and not rely on the importing
+			// program to also import wxr.
+			// (We can let them import ioutil, it's core.)
+			return ParseWPFile(raw)
 		} else {
 			// It's XML but not WordPress
 			errQuit("It's XML, but not in a format I recognize.")
 		}
-		// Future development:
-		//} else if extension == "zip" {
-		//	log.Println("This looks like a Zip archive. Parsing...")
-		//	return ParseZipFile(fname)
+	} else if extension == "zip" {
+		log.Println("This looks like a Zip archive. Parsing...")
+		return ParseZipFile(fname)
 	} else {
 		errQuit("I can't tell what kind of file this is.")
 	}
@@ -85,7 +86,8 @@ func identifyFile(fname string) *ImportedBlogs {
 // Turn our WXR struct into an ImportedBlogs struct.
 // Creating a general format for imported blogs is the first step to
 // generalizing the import process.
-func ParseWPFile(d wxr.Wxr) *ImportedBlogs {
+func ParseWPFile(raw []byte) *ImportedBlogs {
+	d = wxr.ParseWxr(raw)
 	coll := &ImportedBlogs{}
 	for _, ch := range d.Channels {
 		// Create the blog
@@ -147,6 +149,113 @@ func ParseWPFile(d wxr.Wxr) *ImportedBlogs {
 		coll.Collections = append(coll.Collections, c)
 	}
 	return coll
+}
+
+func ParseZipFile(fname string) *ImportedBlogs {
+	return &ImportedBlogs{}
+	zf, err := zip.OpenReader(fname)
+	if err != nil {
+		errQuit(err.Error())
+	}
+	defer zf.Close()
+
+	coll := &ImportedBlogs{}
+	t_coll := make(map[string]*SingleBlog{})
+
+	t_coll["Drafts"] = &SingleBlog{
+		Params: &writeas.CollectionParams{},
+		Posts:  make([]*writeas.PostParams, 0, 0),
+	}
+
+	for _, f := range zf.File {
+		// A trailing slash means this is an empty directory
+		isEmptyDir := strings.HasSuffix(f.Name, "/")
+		if isEmptyDir {
+			title := f.Name[:len(f.Name)-1]
+			if (t_coll[title] == &SingleBlog{}) {
+				t_coll[title] = &SingleBlog{
+					Params: &writeas.CollectionParams{
+						Title:       title,
+						Description: "",
+					},
+					Posts: make([]*writeas.PostParams, 0, 0),
+				}
+			}
+			continue
+		}
+
+		// Get directory, slug, etc. from the filename
+		fParts := strings.Split(f.Name, "/")
+		var collAlias string
+		var postFname string
+		if len(fParts) == 1 {
+			// This is a top-level file
+			collAlias = "Drafts"
+			postFname = fParts[0]
+		} else {
+			// This is a collection post
+			collAlias = fParts[0]
+			postFname = fParts[1]
+		}
+
+		// Ideally, we'll reach each collection's directory before we reach
+		// the first post in the collection. But we can't rely on a zip
+		// file's ordering to be deterministic. So just in case, we do this
+		// check twice.
+		if (t_coll[title] == &SingleBlog{}) {
+			t_coll[title] = &SingleBlog{
+				Params: &writeas.CollectionParams{
+					Title:       title,
+					Description: "",
+				},
+				Posts: make([]*writeas.PostParams, 0, 0),
+			}
+		}
+
+		// Get file contents
+		fc, err := f.Open()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "open file failed: %s: %v", f.Name, err)
+			continue
+		}
+		defer fc.Close()
+		content, err := ioutil.ReadAll(fc)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "read file failed: %s: %v", f.Name, err)
+			continue
+		}
+
+		// Build post parameters
+		p := filenameToParams(postFname)
+		p.Created = &f.Modified
+		p.Title, p.Content = posts.ExtractTitle(string(content))
+
+		t_coll[collAlias].Posts = append(t_coll[collAlias].Posts, p)
+
+		fmt.Printf("%s - %s - %+v\n", f.Name, collAlias, p)
+	}
+	return nil
+}
+
+// filenameToParams returns PostParams with the ID and slug derived from the given filename.
+func filenameToParams(fname string) *writeas.PostParams {
+	baseParts := strings.Split(fname, ".")
+	// This assumes there's at least one '.' in the filename, e.g. abc123.txt
+	// TODO: handle the case where len(baseParts) != 2
+	baseName := baseParts[0]
+
+	p := &writeas.PostParams{}
+
+	parts := strings.Split(baseName, "_")
+	if len(parts) == 1 {
+		// There's no slug -- only an ID
+		p.ID = parts[0]
+	} else {
+		// len(parts) > 1
+		p.Slug = parts[0]
+		p.ID = parts[1]
+	}
+	return p
 }
 
 // Temporarily using an ini file to store instance tokens.
