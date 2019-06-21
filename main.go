@@ -11,12 +11,18 @@
 package main
 
 import (
+	//	"archive/zip"
 	"bufio"
 	"bytes"
+	"flag"
 	"fmt"
 	"github.com/frankbille/go-wxr-import"
+	"github.com/howeyc/gopass"
 	"github.com/writeas/godown"
 	"github.com/writeas/nerds/store"
+	//	"github.com/writeas/web-core/posts"
+	//	"github.com/writeas/wf-migrate"
+	// "github.com/writeas/zip-import"
 	"go.code.as/writeas.v2"
 	"io/ioutil"
 	"log"
@@ -28,69 +34,6 @@ import (
 var (
 	commentReg = regexp.MustCompile("(?m)<!-- ([^m ]|m[^o ]|mo[^r ]|mor[^e ])+ -->\n?")
 )
-
-// Print the usage spec to the terminal and exit cleanly
-func printUsage(help bool) {
-	usage := "usage: wp-import [-h|--help] [-i instance] [-f] filename.xml"
-	if help {
-		usage = usage + "\n" +
-			"  -h|--help     Prints this help message.\n" +
-			"  -i            Specifies the instance to use.\n" +
-			"                Should be one of the instances set up in instances.ini.\n" +
-			"                Defaults to \"writeas\" (https://write.as).\n" +
-			"  -f            Specifies the filename to read from.\n" +
-			"                This can be a relative or absolute path.\n" +
-			"                The flag can be excluded if the filename is the last argument."
-	}
-	fmt.Println(usage)
-	os.Exit(0)
-}
-
-// This should allow input in these formats:
-//   wp-import -h (or --help)
-//   wp-import filename
-//   wp-import -i instance filename
-//   wp-import -i instance -f filename
-
-func parseArgs(args []string) map[string]string {
-	arguments := make(map[string]string)
-	if len(args) == 2 {
-		if args[1] == "-h" || args[1] == "--help" {
-			printUsage(true)
-		} else if string(args[1][0]) != "-" {
-			arguments["filename"] = args[1]
-		} else {
-			printUsage(false)
-		}
-	} else if len(args) < 2 {
-		printUsage(false)
-	} else {
-		// Starting at 1 because args[0] is the program name
-		for i := 1; i < len(args); i++ {
-			if args[i] == "-h" || args[i] == "--help" {
-				printUsage(true)
-			} else if args[i] == "-i" {
-				if i+1 == len(args) || string(args[i+1][0]) == "-" {
-					printUsage(false)
-				}
-				arguments["instance"] = args[i+1]
-				i++
-			} else if args[i] == "-f" {
-				if i+1 == len(args) || string(args[i+1][0]) == "-" {
-					printUsage(false)
-				}
-				arguments["filename"] = args[i+1]
-				i++
-			} else if i == len(args)-1 && string(args[i][0]) != "-" {
-				arguments["filename"] = args[i]
-			}
-		}
-	}
-	if arguments["filename"] == "" {
-		printUsage(false)
-	}
-	return arguments
-}
 
 type instance struct {
 	Name  string
@@ -111,14 +54,25 @@ type SingleBlog struct {
 // For right now, just verify that it's a valid WordPress WXR file.
 // Do this two ways: check that the file extension is "xml", and
 // verify that the word "WordPress" appears in the first 200 characters.
-func identifyFile(fname string, raw []byte) *ImportedBlogs {
+func identifyFile(fname string) *ImportedBlogs {
+	log.Printf("Reading %s...\n", fname)
 	parts := strings.Split(fname, ".")
 	extension := parts[len(parts)-1]
-	rawstr := string(raw[:200])
 
-	if extension == "xml" && strings.Contains(rawstr, "WordPress") {
-		log.Println("This looks like a WordPress file. Parsing...")
-		return parseWPFile(wxr.ParseWxr(raw))
+	if extension == "xml" {
+		raw, _ := ioutil.ReadFile(fname)
+		rawstr := string(raw[:200])
+		if strings.Contains(rawstr, "WordPress") {
+			log.Println("This looks like a WordPress file. Parsing...")
+			return ParseWPFile(wxr.ParseWxr(raw))
+		} else {
+			// It's XML but not WordPress
+			errQuit("I can't tell what kind of file this is.")
+		}
+		// Future development:
+		//} else if extension == "zip" {
+		//	log.Println("This looks like a Zip archive. Parsing...")
+		//	return ParseZipFile(fname)
 	} else {
 		errQuit("I can't tell what kind of file this is.")
 	}
@@ -129,7 +83,7 @@ func identifyFile(fname string, raw []byte) *ImportedBlogs {
 // Turn our WXR struct into an ImportedBlogs struct.
 // Creating a general format for imported blogs is the first step to
 // generalizing the import process.
-func parseWPFile(d wxr.Wxr) *ImportedBlogs {
+func ParseWPFile(d wxr.Wxr) *ImportedBlogs {
 	coll := &ImportedBlogs{}
 	for _, ch := range d.Channels {
 		// Create the blog
@@ -248,20 +202,29 @@ func importConfig() map[string]instance {
 }
 
 func main() {
-	a := parseArgs(os.Args)
-	// if len(os.Args) < 2 {
-	// 	//errQuit("usage: wp-import https://write.as filename.xml")
-	// 	errQuit("usage: wp-import filename.xml")
-	// }
-	// fname := os.Args[1]
-	fname := a["filename"]
+	f_inst := flag.String("i", "writeas", "Named WriteFreely Host (not URL)")
+	f_file := flag.String("f", "", "File to be imported")
+	f_help := flag.Bool("h", false, "Print this help message")
+	f_dry := flag.Bool("d", false, "Dry run (parse the input file but don't upload the contents)")
+	flag.Parse()
+	a := flag.Args()
+	if (*f_file == "" && len(a) == 0) || (*f_help == true) {
+		fmt.Fprintf(os.Stderr, "usage: wfimport [-i myinstance] [-f] file1\n")
+		flag.PrintDefaults()
+		return
+	}
+	var fname string
+	if *f_file != "" {
+		fname = *f_file
+	} else {
+		fname = a[0]
+	}
 	inst := "writeas"
-	if a["instance"] != "" {
-		inst = a["instance"]
+	if *f_inst != "" {
+		inst = *f_inst
 	}
 
 	instances := importConfig()
-	//fmt.Println(instances)
 	var cl *writeas.Client
 	t := ""
 	u := ""
@@ -284,15 +247,15 @@ func main() {
 		if string(url[len(url)-1:]) == "/" {
 			url = string(url[:len(url)-1])
 		}
-		//fmt.Println("Using URL", url)
 		fmt.Print("Username: ")
 		r.Scan()
 		uname := r.Text()
-		//fmt.Println("Using username", uname)
 		fmt.Print("Password: ")
-		r.Scan()
-		passwd := r.Text()
-		//fmt.Println("Using password", passwd)
+		tpwd, pwerr := gopass.GetPasswdMasked()
+		if pwerr != nil {
+			errQuit(pwerr.Error())
+		}
+		passwd := string(tpwd)
 		cl = writeas.NewClientWith(writeas.Config{
 			URL:   url + "/api",
 			Token: "",
@@ -308,13 +271,8 @@ func main() {
 		fmt.Println("Okay, you're logged in.")
 	}
 
-	log.Printf("Reading %s...\n", fname)
-	raw, _ := ioutil.ReadFile(fname)
-
-	log.Println("Parsing...")
-
 	// What kind of file is it?
-	d := identifyFile(fname, raw) // d is now an ImportedBlogs object, not a WXR object
+	d := identifyFile(fname) // d is now an ImportedBlogs object, not a WXR object
 
 	log.Printf("Found %d channels.\n", len(d.Collections))
 
@@ -324,38 +282,44 @@ func main() {
 		c := ch.Params
 		title := c.Title
 		log.Printf("Channel: %s\n", title)
-
-		log.Printf("Creating %s...\n", title)
-		coll, err := cl.CreateCollection(c)
-		if err != nil {
-			if err.Error() == "Collection name is already taken." {
-				title = title + " " + store.GenerateFriendlyRandomString(4)
-				log.Printf("A blog by that name already exists. Changing to %s...\n", title)
-				c.Title = title
-				coll, err = cl.CreateCollection(c)
-				if err != nil {
+		var coll *writeas.Collection
+		var err error
+		if *f_dry == false {
+			log.Printf("Creating %s...\n", title)
+			coll, err = cl.CreateCollection(c)
+			if err != nil {
+				if err.Error() == "Collection name is already taken." {
+					title = title + " " + store.GenerateFriendlyRandomString(4)
+					log.Printf("A blog by that name already exists. Changing to %s...\n", title)
+					c.Title = title
+					coll, err = cl.CreateCollection(c)
+					if err != nil {
+						errQuit(err.Error())
+					}
+				} else {
 					errQuit(err.Error())
 				}
-			} else {
-				errQuit(err.Error())
 			}
+			log.Printf("Done!\n")
 		}
-		log.Printf("Done!\n")
-
 		log.Printf("Found %d posts.\n", len(ch.Posts))
 		for _, p := range ch.Posts {
 			log.Printf("Creating %s", p.Title)
-			p.Collection = coll.Alias
-			_, err = cl.CreatePost(p)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "create post: %s\n", err)
-				continue
+			if *f_dry == false {
+				p.Collection = coll.Alias
+				_, err = cl.CreatePost(p)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "create post: %s\n", err)
+					continue
+				}
 			}
-
 			postsCount++
 		}
 	}
 	log.Printf("Created %d posts.\n", postsCount)
+	if *f_dry == true {
+		log.Println("THIS WAS A DRY RUN! No posts or collections were actually created on the remote server.")
+	}
 }
 
 func errQuit(m string) {
