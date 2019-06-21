@@ -238,10 +238,10 @@ func main() {
 	} else {
 		fmt.Println("We don't have a token for " + inst + ".")
 		r := bufio.NewScanner(os.Stdin)
-		fmt.Print("Instance URL: ")
+		fmt.Print("Instance URL (include http/https): ")
 		r.Scan()
 		url := r.Text()
-		if string(url[:5]) != "https" {
+		if string(url[:4]) != "http" {
 			url = "https://" + url
 		}
 		if string(url[len(url)-1:]) == "/" {
