@@ -98,23 +98,99 @@ type instance struct {
 	Token string
 }
 
+type ImportedBlogs struct {
+	Collections []*SingleBlog
+}
+
+type SingleBlog struct {
+	Params *writeas.CollectionParams
+	Posts  []*writeas.PostParams
+}
+
 // Preparing to be able to handle multiple types of files.
 // For right now, just verify that it's a valid WordPress WXR file.
 // Do this two ways: check that the file extension is "xml", and
 // verify that the word "WordPress" appears in the first 200 characters.
-func identifyFile(fname string, raw []byte) wxr.Wxr {
+func identifyFile(fname string, raw []byte) *ImportedBlogs {
 	parts := strings.Split(fname, ".")
 	extension := parts[len(parts)-1]
 	rawstr := string(raw[:200])
-	var d wxr.Wxr
 
 	if extension == "xml" && strings.Contains(rawstr, "WordPress") {
 		log.Println("This looks like a WordPress file. Parsing...")
-		return wxr.ParseWxr(raw)
+		return parseWPFile(wxr.ParseWxr(raw))
 	} else {
 		errQuit("I can't tell what kind of file this is.")
 	}
+	// punt
+	return &ImportedBlogs{}
+}
 
+// Turn our WXR struct into an ImportedBlogs struct.
+// Creating a general format for imported blogs is the first step to
+// generalizing the import process.
+func parseWPFile(d wxr.Wxr) *ImportedBlogs {
+	coll := &ImportedBlogs{}
+	for _, ch := range d.Channels {
+		// Create the blog
+		c := &SingleBlog{
+			Params: &writeas.CollectionParams{
+				Title:       ch.Title,
+				Description: ch.Description,
+			},
+			Posts: make([]*writeas.PostParams, 0, 0),
+		}
+
+		for _, wpp := range ch.Items {
+			if wpp.PostType != "post" {
+				continue
+			}
+
+			// Convert to Markdown
+			b := bytes.NewBufferString("")
+			r := bytes.NewReader([]byte(wpp.Content))
+			err := godown.Convert(b, r, nil)
+			if err != nil {
+				errQuit(err.Error())
+			}
+			con := b.String()
+
+			// Remove unneeded WordPress comments that take up space, like <!-- wp:paragraph -->
+			con = commentReg.ReplaceAllString(con, "")
+
+			// Append tags
+			tags := ""
+			sep := ""
+			for _, cat := range wpp.Categories {
+				if cat.Domain != "post_tag" {
+					continue
+				}
+				tags += sep + "#" + cat.DisplayName
+				sep = " "
+			}
+			if tags != "" {
+				con += "\n\n" + tags
+			}
+			var postlang string
+			if len(ch.Language) > 2 {
+				postlang = string(ch.Language[:2])
+			} else {
+				postlang = ch.Language
+			}
+			p := &writeas.PostParams{
+				Title:    wpp.Title,
+				Slug:     wpp.PostName,
+				Content:  con,
+				Created:  &wpp.PostDateGmt,
+				Updated:  &wpp.PostDateGmt,
+				Font:     "norm",
+				Language: &postlang,
+			}
+			c.Posts = append(c.Posts, p)
+		}
+		coll.Collections = append(coll.Collections, c)
+	}
+	return coll
 }
 
 // Temporarily using an ini file to store instance tokens.
@@ -238,27 +314,24 @@ func main() {
 	log.Println("Parsing...")
 
 	// What kind of file is it?
-	d := identifyFile(fname, raw)
+	d := identifyFile(fname, raw) // d is now an ImportedBlogs object, not a WXR object
 
-	log.Printf("Found %d channels.\n", len(d.Channels))
+	log.Printf("Found %d channels.\n", len(d.Collections))
 
 	postsCount := 0
 
-	for _, ch := range d.Channels {
-		log.Printf("Channel: %s\n", ch.Title)
+	for _, ch := range d.Collections {
+		c := ch.Params
+		title := c.Title
+		log.Printf("Channel: %s\n", title)
 
-		// Create the blog
-		c := &writeas.CollectionParams{
-			Title:       ch.Title,
-			Description: ch.Description,
-		}
-		log.Printf("Creating %s...\n", ch.Title)
+		log.Printf("Creating %s...\n", title)
 		coll, err := cl.CreateCollection(c)
 		if err != nil {
 			if err.Error() == "Collection name is already taken." {
-				newTitle := ch.Title + " " + store.GenerateFriendlyRandomString(4)
-				log.Printf("A blog by that name already exists. Changing to %s...\n", newTitle)
-				c.Title = newTitle
+				title = title + " " + store.GenerateFriendlyRandomString(4)
+				log.Printf("A blog by that name already exists. Changing to %s...\n", title)
+				c.Title = title
 				coll, err = cl.CreateCollection(c)
 				if err != nil {
 					errQuit(err.Error())
@@ -269,51 +342,10 @@ func main() {
 		}
 		log.Printf("Done!\n")
 
-		log.Printf("Found %d items.\n", len(ch.Items))
-		for _, wpp := range ch.Items {
-			if wpp.PostType != "post" {
-				continue
-			}
-
-			// Convert to Markdown
-			b := bytes.NewBufferString("")
-			r := bytes.NewReader([]byte(wpp.Content))
-			err = godown.Convert(b, r, nil)
-			con := b.String()
-
-			// Remove unneeded WordPress comments that take up space, like <!-- wp:paragraph -->
-			con = commentReg.ReplaceAllString(con, "")
-
-			// Append tags
-			tags := ""
-			sep := ""
-			for _, cat := range wpp.Categories {
-				if cat.Domain != "post_tag" {
-					continue
-				}
-				tags += sep + "#" + cat.DisplayName
-				sep = " "
-			}
-			if tags != "" {
-				con += "\n\n" + tags
-			}
-			var postlang string
-			if len(ch.Language) > 2 {
-				postlang = string(ch.Language[:2])
-			} else {
-				postlang = ch.Language
-			}
-			p := &writeas.PostParams{
-				Title:      wpp.Title,
-				Slug:       wpp.PostName,
-				Content:    con,
-				Created:    &wpp.PostDateGmt,
-				Updated:    &wpp.PostDateGmt,
-				Font:       "norm",
-				Language:   &postlang,
-				Collection: coll.Alias,
-			}
+		log.Printf("Found %d posts.\n", len(ch.Posts))
+		for _, p := range ch.Posts {
 			log.Printf("Creating %s", p.Title)
+			p.Collection = coll.Alias
 			_, err = cl.CreatePost(p)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "create post: %s\n", err)
