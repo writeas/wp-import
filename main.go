@@ -51,13 +51,13 @@ type SingleBlog struct {
 }
 
 // Preparing to be able to handle multiple types of files.
-// For right now, just verify that it's a valid WordPress WXR file.
-// Do this two ways: check that the file extension is "xml", and
-// verify that the word "WordPress" appears in the first 200 characters.
+// If the extension is "xml", verify that it's a valid WordPress WXR file:
+//   Check to see if the word "WordPress" appears in the first 200 characters.
+// If the extension is "zip", parse it as a ZIP file.
 func identifyFile(fname string) *ImportedBlogs {
 	log.Printf("Reading %s...\n", fname)
 	parts := strings.Split(fname, ".")
-	extension := parts[len(parts)-1]
+	extension := strings.ToLower(parts[len(parts)-1])
 
 	if extension == "xml" {
 		raw, _ := ioutil.ReadFile(fname)
@@ -76,6 +76,10 @@ func identifyFile(fname string) *ImportedBlogs {
 	} else if extension == "zip" {
 		log.Println("This looks like a Zip archive. Parsing...")
 		return ParseZipFile(fname)
+	} else if extension == "json" {
+		// TODO: Identify specifically as a WriteFreely JSON file
+		log.Println("This looks like a WriteFreely JSON file. Parsing...")
+		return ParseWFJSONFile(fname)
 	} else {
 		errQuit("I can't tell what kind of file this is.")
 	}
@@ -151,8 +155,14 @@ func ParseWPFile(raw []byte) *ImportedBlogs {
 	return coll
 }
 
+// Read through the ZIP file, converting text files to posts
+// and directories to blogs.
+// If the filename ends in a / it's a directory.
+// Otherwise, filenames have the format "[directory/]postname.txt"
+// If there's no directory, then it's a draft post
+// If there is a directory, the directory is the blog the post goes in
 func ParseZipFile(fname string) *ImportedBlogs {
-	return &ImportedBlogs{}
+	//return &ImportedBlogs{}
 	zf, err := zip.OpenReader(fname)
 	if err != nil {
 		errQuit(err.Error())
@@ -172,6 +182,8 @@ func ParseZipFile(fname string) *ImportedBlogs {
 		isEmptyDir := strings.HasSuffix(f.Name, "/")
 		if isEmptyDir {
 			title := f.Name[:len(f.Name)-1]
+			// I think this will work. &SingleBlog{} should be the null value
+			// If there isn't already a blog with this name, make one
 			if (t_coll[title] == &SingleBlog{}) {
 				t_coll[title] = &SingleBlog{
 					Params: &writeas.CollectionParams{
@@ -181,6 +193,8 @@ func ParseZipFile(fname string) *ImportedBlogs {
 					Posts: make([]*writeas.PostParams, 0, 0),
 				}
 			}
+			// If there is, we don't need to do anything.
+			// Either way, skip the rest of the block and go to the next file
 			continue
 		}
 
@@ -202,10 +216,10 @@ func ParseZipFile(fname string) *ImportedBlogs {
 		// the first post in the collection. But we can't rely on a zip
 		// file's ordering to be deterministic. So just in case, we do this
 		// check twice.
-		if (t_coll[title] == &SingleBlog{}) {
-			t_coll[title] = &SingleBlog{
+		if (t_coll[collAlias] == &SingleBlog{}) {
+			t_coll[collAlias] = &SingleBlog{
 				Params: &writeas.CollectionParams{
-					Title:       title,
+					Title:       collAlias,
 					Description: "",
 				},
 				Posts: make([]*writeas.PostParams, 0, 0),
@@ -215,13 +229,13 @@ func ParseZipFile(fname string) *ImportedBlogs {
 		// Get file contents
 		fc, err := f.Open()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "open file failed: %s: %v", f.Name, err)
+			fmt.Fprintf(os.Stderr, "Couldn't open file: %s: %v", f.Name, err)
 			continue
 		}
 		defer fc.Close()
 		content, err := ioutil.ReadAll(fc)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "read file failed: %s: %v", f.Name, err)
+			fmt.Fprintf(os.Stderr, "Opened file but couldn't read it: %s: %v", f.Name, err)
 			continue
 		}
 
@@ -234,6 +248,19 @@ func ParseZipFile(fname string) *ImportedBlogs {
 
 		fmt.Printf("%s - %s - %+v\n", f.Name, collAlias, p)
 	}
+
+	for k, v := range t_coll {
+		coll.Collections = append(coll.Collections, v)
+	}
+	return coll
+}
+
+// Turn WriteFreely JSON file into an ImportedBlogs struct.
+// TODO: Find out how our JSON files are structured!
+//
+func ParseWFJSONFile(fname string) *ImportedBlogs {
+	return &ImportedBlogs{}
+
 	return nil
 }
 
