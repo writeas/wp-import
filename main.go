@@ -71,7 +71,7 @@ func main() {
 		log.Printf("Done!\n")
 
 		log.Printf("Found %d items.\n", len(ch.Items))
-		for i, wpp := range ch.Items {
+		for _, wpp := range ch.Items {
 			if wpp.PostType != "post" {
 				continue
 			}
