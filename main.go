@@ -46,6 +46,10 @@ func main() {
 		Token: t,
 	})
 
+	// An application key is required on Write.as to skip API rate-limiting
+	appKey := ""
+	cl.SetApplicationKey(appKey)
+
 	log.Printf("Reading %s...\n", fname)
 	raw, _ := ioutil.ReadFile(fname)
 
