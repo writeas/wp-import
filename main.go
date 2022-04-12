@@ -116,8 +116,7 @@ func main() {
 			log.Printf("Creating %s", p.Title)
 			_, err = cl.CreatePost(p)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "create post: %s\n", err)
-				continue
+				errQuit(fmt.Sprintf("create post: %s\n", err))
 			}
 
 			postsCount++
