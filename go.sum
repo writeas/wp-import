@@ -16,6 +16,8 @@ github.com/smartystreets/goconvey v1.7.2 h1:9RBaZCeXEQ3UselpuwUQHltGVXvdwm6cv1hg
 github.com/smartystreets/goconvey v1.7.2/go.mod h1:Vw0tHAZW6lzCRk3xgdin6fKYcG+G3Pg9vgXWeJpQFMM=
 github.com/writeas/go-writeas/v2 v2.0.3 h1:mCQ+EsZ59OSeW5N4IR/l0UtoZQDtRuWWXn6BK/8Mt6A=
 github.com/writeas/go-writeas/v2 v2.0.3/go.mod h1:9sjczQJKmru925fLzg0usrU1R1tE4vBmQtGnItUMR0M=
+github.com/writeas/go-writeas/v2 v2.0.4-0.20211126234656-a8ae32056cec h1:hC0mUJq3hZPFI00GMqvGfCtcZTiJomX2C1hDU/IJgxw=
+github.com/writeas/go-writeas/v2 v2.0.4-0.20211126234656-a8ae32056cec/go.mod h1:9sjczQJKmru925fLzg0usrU1R1tE4vBmQtGnItUMR0M=
 github.com/writeas/godown v0.0.0-20180312012330-2e9e17e0ea51 h1:Ob3g6Jw5SiDOUOP7yQRuIvYM++w9/GlKm+EcxKqnfqE=
 github.com/writeas/godown v0.0.0-20180312012330-2e9e17e0ea51/go.mod h1:WtiUrpDVUtoIAoptSZgPdzwoMRGByJepj9zIKdFTmtw=
 github.com/writeas/impart v1.1.0 h1:nPnoO211VscNkp/gnzir5UwCDEvdHThL5uELU60NFSE=
