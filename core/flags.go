@@ -16,7 +16,7 @@ var DefaultFlags = []cli.Flag{
 	&cli.StringFlag{
 		Name:        "user",
 		Aliases:     []string{"u"},
-		Usage:       "The username for the Write.as/WriteFreely account",
+		Usage:       "Username for the Write.as/WriteFreely account",
 		Required:    true,
 		Destination: &Username,
 	},
@@ -24,7 +24,7 @@ var DefaultFlags = []cli.Flag{
 	&cli.StringFlag{
 		Name:        "blog",
 		Aliases:     []string{"b"},
-		Usage:       "The alias of the destination blog for importing your content.",
+		Usage:       "Alias of the destination blog for importing your content.",
 		Required:    true,
 		Destination: &DstBlog,
 	},
@@ -32,7 +32,7 @@ var DefaultFlags = []cli.Flag{
 	&cli.StringFlag{
 		Name:        "instance",
 		Aliases:     []string{"i"},
-		Usage:       "Provide the URL of your WriteFreely instance (e.g., '--instance https://pencil.writefree.ly')",
+		Usage:       "URL of your WriteFreely instance (e.g., '--instance https://pencil.writefree.ly')",
 		Destination: &InstanceURL,
 	},
 }
