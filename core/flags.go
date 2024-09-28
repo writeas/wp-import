@@ -34,5 +34,6 @@ var DefaultFlags = []cli.Flag{
 		Aliases:     []string{"i"},
 		Usage:       "URL of your WriteFreely instance (e.g., '--instance https://pencil.writefree.ly')",
 		Destination: &InstanceURL,
+		DefaultText: "https://write.as",
 	},
 }
