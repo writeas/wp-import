@@ -92,11 +92,13 @@ func ImportWordPress(dstBlog string, raw []byte) error {
 			log.Printf("Creating %s", p.Title)
 			_, err = core.Client.CreatePost(p)
 			if err != nil {
-				errQuit(fmt.Sprintf("create post: %s\n", err))
+				fmt.Fprintf(os.Stderr, "create post: %s\n", err)
+				continue
 			}
 
 			postsCount++
 		}
+		log.Printf("Created %d posts.\n", postsCount)
 	}
 	return nil
 }
