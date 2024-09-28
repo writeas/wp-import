@@ -1,6 +1,6 @@
 /*
  * wp-import imports posts from WordPress into Write.as / WriteFreely.
- * Copyright © 2019 A Bunch Tell LLC.
+ * Copyright © 2019, 2024 Musing Studio LLC.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -8,7 +8,7 @@
  * (at your option) any later version.
  */
 
-package main
+package wpimport
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 	"github.com/frankbille/go-wxr-import"
 	"github.com/writeas/go-writeas/v2"
 	"github.com/writeas/godown"
-	"io/ioutil"
+	"github.com/writeas/wp-import/core"
 	"log"
 	"os"
 	"regexp"
@@ -26,34 +26,7 @@ var (
 	commentReg = regexp.MustCompile("(?m)<!-- ([^m ]|m[^o ]|mo[^r ]|mor[^e ])+ -->\n?")
 )
 
-func main() {
-	if len(os.Args) < 2 {
-		//errQuit("usage: wp-import https://write.as filename.xml")
-		errQuit("usage: wp-import filename.xml")
-	}
-	//instance := os.Args[1]
-	instance := "https://write.as"
-	fname := os.Args[1]
-
-	// TODO: load user config from same func as writeas-cli
-	t := ""
-	if t == "" {
-		errQuit("not authenticated. run: writeas auth <username>")
-	}
-
-	cl := writeas.NewClientWith(writeas.Config{
-		URL:   instance + "/api",
-		Token: t,
-	})
-
-	// An application key is required on Write.as to skip API rate-limiting
-	appKey := ""
-	cl.SetApplicationKey(appKey)
-
-	log.Printf("Reading %s...\n", fname)
-	raw, _ := ioutil.ReadFile(fname)
-
-	log.Println("Parsing...")
+func ImportWordPress(dstBlog string, raw []byte) error {
 	d := wxr.ParseWxr(raw)
 	log.Printf("Found %d channels.\n", len(d.Channels))
 
@@ -62,17 +35,19 @@ func main() {
 	for _, ch := range d.Channels {
 		log.Printf("Channel: %s\n", ch.Title)
 
-		// Create the blog
-		c := &writeas.CollectionParams{
-			Title:       ch.Title,
-			Description: ch.Description,
-		}
-		log.Printf("Creating %s...\n", ch.Title)
-		coll, err := cl.CreateCollection(c)
-		if err != nil {
-			errQuit(err.Error())
-		}
-		log.Printf("Done!\n")
+		/*
+			// Create the blog
+			c := &writeas.CollectionParams{
+				Title:       ch.Title,
+				Description: ch.Description,
+			}
+			log.Printf("Creating %s...\n", ch.Title)
+			coll, err := core.Client.CreateCollection(c)
+			if err != nil {
+				return err
+			}
+			log.Printf("Done!\n")
+		*/
 
 		log.Printf("Found %d items.\n", len(ch.Items))
 		for _, wpp := range ch.Items {
@@ -83,7 +58,7 @@ func main() {
 			// Convert to Markdown
 			b := bytes.NewBufferString("")
 			r := bytes.NewReader([]byte(wpp.Content))
-			err = godown.Convert(b, r, nil)
+			err := godown.Convert(b, r, nil)
 			con := b.String()
 
 			// Remove unneeded WordPress comments that take up space, like <!-- wp:paragraph -->
@@ -111,10 +86,11 @@ func main() {
 				Updated:    &wpp.PostDateGmt,
 				Font:       "norm",
 				Language:   &ch.Language,
-				Collection: coll.Alias,
+				Collection: dstBlog,
+				//Collection: coll.Alias,
 			}
 			log.Printf("Creating %s", p.Title)
-			_, err = cl.CreatePost(p)
+			_, err = core.Client.CreatePost(p)
 			if err != nil {
 				errQuit(fmt.Sprintf("create post: %s\n", err))
 			}
@@ -122,7 +98,7 @@ func main() {
 			postsCount++
 		}
 	}
-	log.Printf("Created %d posts.\n", postsCount)
+	return nil
 }
 
 func errQuit(m string) {
