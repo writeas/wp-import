@@ -23,9 +23,10 @@ var fname string
 
 func main() {
 	app := &cli.App{
-		Name:    "WriteFreely WordPress importer",
-		Usage:   "Import a WordPress blog into Write.as/WriteFreely by running this importer on an exported WXR file.",
-		Version: "1.0.0",
+		Name:     "WordPress-to-WriteFreely importer",
+		HelpName: "wp-import",
+		Usage:    "Import a WordPress blog into Write.as/WriteFreely by running this importer on an exported WXR file.",
+		Version:  "1.0.0",
 		Flags: append(core.DefaultFlags, []cli.Flag{
 			&cli.StringFlag{
 				Name:        "filename",
