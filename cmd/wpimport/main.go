@@ -12,11 +12,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/writeas/wp-import/core"
 	"log"
 	"os"
 
 	"github.com/urfave/cli/v2"
-	"github.com/writeas/wp-import/core"
 )
 
 var fname string
@@ -27,21 +27,12 @@ func main() {
 		HelpName: "wp-import",
 		Usage:    "Import a WordPress blog into Write.as/WriteFreely by running this importer on an exported WXR file.",
 		Version:  "1.0.0",
-		Flags: append(core.DefaultFlags, []cli.Flag{
-			&cli.StringFlag{
-				Name:        "filename",
-				Aliases:     []string{"f"},
-				Usage:       "",
-				Required:    true,
-				Destination: &fname,
-			},
-		}...),
 		Commands: []*cli.Command{
 			{
 				Name:   "import",
 				Action: CmdImport,
 				Usage:  "Import WordPress export file into WriteFreely",
-				Flags: []cli.Flag{
+				Flags: append(core.DefaultFlags, []cli.Flag{
 					&cli.StringFlag{
 						Name:        "filename",
 						Aliases:     []string{"f"},
@@ -49,7 +40,7 @@ func main() {
 						Required:    true,
 						Destination: &fname,
 					},
-				},
+				}...),
 			},
 		},
 	}
